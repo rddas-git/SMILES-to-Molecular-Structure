@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SMILES Molecule Viewer & Downloader</title>
+    <script src="https://unpkg.com/@rdkit/rdkit/dist/RDKit_minimal.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            font-family: 'Poppins', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #e0e0e0;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            width: 420px;
+            padding: 40px 35px;
+            text-align: center;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .container:hover {
+            box-shadow: 0 12px 48px rgba(59, 130, 246, 0.7);
+        }
+
+        h1 {
+            font-weight: 600;
+            font-size: 28px;
+            margin-bottom: 28px;
+            color: #8ec5fc;
+            text-shadow: 0 0 10px #3b82f6;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 16px 20px;
+            font-size: 16px;
+            border-radius: 14px;
+            border: 2px solid #3b82f6;
+            background: rgba(255, 255, 255, 0.15);
+            color: #e0e0e0;
+            outline: none;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        input[type="text"]::placeholder {
+            color: #cbd5e1aa;
+        }
+
+        input[type="text"]:focus {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: #60a5fa;
+            box-shadow: 0 0 10px #60a5faaa;
+        }
+
+        button {
+            margin-top: 25px;
+            width: 100%;
+            padding: 16px 0;
+            font-weight: 600;
+            font-size: 18px;
+            color: #0f172a;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6);
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.6);
+            transition: background 0.4s ease, transform 0.2s ease;
+        }
+
+        button:hover {
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            transform: scale(1.05);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        canvas {
+            margin-top: 30px;
+            border-radius: 20px;
+            width: 100%;
+            height: 300px;
+            max-height: 300px;
+            border: 3px solid rgba(59, 130, 246, 0.5);
+            background: #0f172a;
+            box-shadow: inset 0 0 15px rgba(59, 130, 246, 0.3);
+        }
+
+        #error {
+            margin-top: 18px;
+            color: #f87171;
+            font-weight: 600;
+            min-height: 28px;
+            letter-spacing: 0.03em;
+        }
+
+        .buttons-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 18px;
+        }
+
+        .buttons-row button {
+            width: 48%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h6>rddas</h6>
+        <h1>SMILES to MOLECULAR STRUCTURE</h1>
+        <input id="smilesInput" type="text" style="width: 85%;" placeholder="Enter SMILES (e.g.- C1=CC=C(C=C1)O)" />
+        <div class="buttons-row">
+            <button onclick="drawMolecule()">Draw Molecule</button>
+            <button onclick="downloadImage()" id="downloadBtn" disabled>Download</button>
+        </div>
+        <canvas id="molCanvas" width="400" height="300"></canvas>
+        <p id="error"></p>
+    </div>
+
+    <script>
+        let lastCanvasImage = null;
+
+        async function drawMolecule() {
+            const smiles = document.getElementById('smilesInput').value.trim();
+            const errorP = document.getElementById('error');
+            const downloadBtn = document.getElementById('downloadBtn');
+            errorP.textContent = '';
+            downloadBtn.disabled = true;
+            clearCanvas();
+
+            if (!smiles) {
+                errorP.textContent = 'Please enter a SMILES string.';
+                return;
+            }
+
+            const RDKitModule = await initRDKitModule();
+            try {
+                const mol = RDKitModule.get_mol(smiles);
+                if (!mol) throw 'Invalid molecule';
+
+                const svg = mol.get_svg();
+                const DOMURL = window.URL || window.webkitURL || window;
+                const img = new Image();
+                const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+                const url = DOMURL.createObjectURL(svgBlob);
+
+                img.onload = function () {
+                    const canvas = document.getElementById('molCanvas');
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    DOMURL.revokeObjectURL(url);
+
+                    // Save current image for download
+                    lastCanvasImage = canvas.toDataURL('image/png');
+                    downloadBtn.disabled = false;
+                };
+                img.src = url;
+
+                mol.delete();
+            } catch (e) {
+                errorP.textContent = "Invalid SMILES string.";
+            }
+        }
+
+        function clearCanvas() {
+            const canvas = document.getElementById('molCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            lastCanvasImage = null;
+            document.getElementById('downloadBtn').disabled = true;
+        }
+
+        function downloadImage() {
+            if (!lastCanvasImage) return;
+
+            const link = document.createElement('a');
+            link.href = lastCanvasImage;
+            link.download = 'molecule.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+
+</body>
+
+</html>
